@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
@@ -77,13 +78,7 @@ public class SampleTest {
         System.out.println(proxy.getClass().getSimpleName());
         System.out.println(method.getName());
         System.out.println(methodProxy.getSuperName());
-        final Class<?> declaringClass = method.getDeclaringClass();
-        final Class<?> returnType = method.getReturnType();
-        final int parameterCount = method.getParameterCount();
-
-        if (declaringClass.equals(Sample.class)
-          && returnType.equals(String.class)
-          && parameterCount ==1){
+        if (isExpectedMethod(method)){
           return HELLO_WORLD;
         }else{
           return methodProxy.invokeSuper(proxy, args);
@@ -93,5 +88,46 @@ public class SampleTest {
     final Sample proxy = (Sample) enhancer.create();
     assertEquals(HELLO_WORLD, proxy.test("hello"));
     proxy.hashCode();
+  }
+
+
+
+  @Test
+  void test_EnhancerCallBackFilter() {
+    CallbackHelper callbackHelper = new CallbackHelper(Sample.class, new Class[0]) {
+      @Override
+      protected Object getCallback(Method method) {
+
+        if (isExpectedMethod(method)){
+          return new FixedValue() {
+            @Override
+            public Object loadObject() throws Exception {
+              return HELLO_WORLD;
+            }
+          };
+        }else{
+          return NoOp.INSTANCE;
+        }
+      }
+    };
+    enhancer.setCallbackFilter(callbackHelper);
+    enhancer.setCallbacks(callbackHelper.getCallbacks());
+
+    Sample proxy = (Sample) enhancer.create();
+
+    assertEquals(HELLO_WORLD, proxy.test("hello"));
+    assertNotEquals(HELLO_WORLD, proxy.toString());
+    proxy.hashCode();
+  }
+
+
+  private boolean isExpectedMethod(Method method) {
+    final Class<?> declaringClass = method.getDeclaringClass();
+    final Class<?> returnType = method.getReturnType();
+    final int parameterCount = method.getParameterCount();
+
+    return declaringClass.equals(Sample.class)
+            && returnType.equals(String.class)
+            && parameterCount == 1;
   }
 }
